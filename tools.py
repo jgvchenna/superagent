@@ -19,6 +19,8 @@ from typing import Optional
 import wikipedia
 from duckduckgo_search import DDGS
 from langchain_core.tools import tool
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.document_loaders import WikipediaLoader, ArxivLoader
 
 
 # ─── Web Search ───────────────────────────────────────────────────────────────
@@ -280,9 +282,110 @@ def reasoning_scratchpad(problem: str) -> str:
     return template
 
 
+# ─── Advanced Web Search (Tavily) ────────────────────────────────────────────
+
+@tool
+def tavily_search(query: str, max_results: int = 5) -> str:
+    """Search the web using Tavily's advanced search API.
+    Use as a fallback when standard web_search returns poor results.
+    Provides high-quality, verified results with better coverage.
+    Best for: complex queries, recent events, academic topics, research.
+    """
+    try:
+        # Check if API key is available in environment
+        import os
+        api_key = os.environ.get("TAVILY_API_KEY")
+        if not api_key:
+            return "Tavily API key not configured. Use web_search or other tools instead."
+
+        tavily = TavilySearchResults(max_results=max_results)
+        results = tavily.invoke({"query": query})
+
+        if isinstance(results, list) and results:
+            formatted = []
+            for i, result in enumerate(results, 1):
+                if isinstance(result, dict):
+                    title = result.get("title", "Unknown")
+                    url = result.get("url", "")
+                    content = result.get("content", "")
+                    formatted.append(f"**{i}. {title}**\nURL: {url}\n{content}\n")
+                else:
+                    formatted.append(f"**{i}.** {str(result)}\n")
+            return "\n---\n".join(formatted)
+        else:
+            return "No results found using Tavily search."
+    except Exception as e:
+        return f"Tavily search error: {e}"
+
+
+# ─── Wikipedia Document Loader ──────────────────────────────────────────────
+
+@tool
+def wikipedia_loader(topic: str, max_docs: int = 2) -> str:
+    """Load full Wikipedia documents for a topic.
+    Use when you need comprehensive, in-depth information about a topic.
+    Returns full page content (not just summaries).
+    Best for: historical events, biographies, scientific concepts, geography.
+    """
+    try:
+        loader = WikipediaLoader(query=topic, load_max_docs=max_docs)
+        docs = loader.load()
+
+        if not docs:
+            return f"No Wikipedia documents found for '{topic}'."
+
+        output_parts = []
+        for doc in docs:
+            content = doc.page_content[:2000]  # Limit to first 2000 chars per doc
+            metadata = doc.metadata
+            title = metadata.get("title", topic)
+            output_parts.append(f"## {title}\n\n{content}")
+
+        return "\n\n---\n\n".join(output_parts)
+    except Exception as e:
+        return f"Wikipedia loader error: {e}"
+
+
+# ─── ArXiv Academic Search ──────────────────────────────────────────────────
+
+@tool
+def arxiv_search(query: str, max_docs: int = 3) -> str:
+    """Search ArXiv for academic papers and research articles.
+    Use for scientific, mathematical, physics, computer science questions.
+    Returns paper titles, authors, abstracts, and links.
+    Best for: research papers, scientific methodology, academic references.
+    """
+    try:
+        loader = ArxivLoader(query=query, load_max_docs=max_docs)
+        docs = loader.load()
+
+        if not docs:
+            return f"No ArXiv papers found for '{query}'."
+
+        output_parts = []
+        for doc in docs:
+            content = doc.page_content[:1500]  # Limit content length
+            metadata = doc.metadata
+            title = metadata.get("title", "Unknown")
+            authors = metadata.get("authors", "Unknown")
+            arxiv_id = metadata.get("arxiv_id", "")
+
+            output_parts.append(
+                f"**{title}**\n"
+                f"Authors: {authors}\n"
+                f"ArXiv ID: {arxiv_id}\n\n"
+                f"{content}\n"
+            )
+
+        return "\n\n---\n\n".join(output_parts)
+    except Exception as e:
+        return f"ArXiv search error: {e}"
+
+
 # ─── Tool Registry ────────────────────────────────────────────────────────────
 
-ALL_TOOLS = [
+# Stage 1: Primary tools (always available)
+PRIMARY_TOOLS = [
     web_search,
     wikipedia_search,
     calculator,
@@ -290,10 +393,22 @@ ALL_TOOLS = [
     reasoning_scratchpad,
 ]
 
+# Stage 2: Fallback tools (used when primary search results are insufficient)
+FALLBACK_TOOLS = [
+    tavily_search,
+    wikipedia_loader,
+    arxiv_search,
+]
+
+ALL_TOOLS = PRIMARY_TOOLS + FALLBACK_TOOLS
+
 TOOL_METADATA = {
     "web_search":          {"icon": "🔍", "color": "#3B8BD4", "label": "Web Search"},
     "wikipedia_search":    {"icon": "📖", "color": "#D85A30", "label": "Wikipedia"},
     "calculator":          {"icon": "🧮", "color": "#1D9E75", "label": "Calculator"},
     "python_repl":         {"icon": "⚡", "color": "#7F77DD", "label": "Python REPL"},
     "reasoning_scratchpad":{"icon": "🧠", "color": "#BA7517", "label": "Reasoning"},
+    "tavily_search":       {"icon": "🎯", "color": "#FF6B6B", "label": "Tavily Search"},
+    "wikipedia_loader":    {"icon": "📚", "color": "#FFA500", "label": "Wikipedia Full"},
+    "arxiv_search":        {"icon": "🔬", "color": "#9370DB", "label": "ArXiv Papers"},
 }

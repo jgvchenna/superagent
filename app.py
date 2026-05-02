@@ -530,13 +530,23 @@ def create_ui():
 
                 ## Tools
 
+                ### Primary Tools (Tier 1)
                 | Tool | Purpose |
                 |------|---------|
                 | 🔍 **web_search** | DuckDuckGo search for current/factual information |
-                | 📖 **wikipedia_search** | Encyclopedic knowledge retrieval |
+                | 📖 **wikipedia_search** | Quick Wikipedia summaries |
                 | 🧮 **calculator** | Safe arithmetic and algebraic evaluation |
                 | ⚡ **python_repl** | Sandboxed Python for complex computation |
                 | 🧠 **reasoning_scratchpad** | Structured chain-of-thought template |
+
+                ### Fallback Tools (Tier 2)
+                *Used automatically when primary searches return insufficient results:*
+
+                | Tool | Purpose |
+                |------|---------|
+                | 🎯 **tavily_search** | Advanced web search with better coverage for complex queries |
+                | 📚 **wikipedia_loader** | Full Wikipedia document loading for comprehensive information |
+                | 🔬 **arxiv_search** | Academic papers and research articles for scientific topics |
                 """))
 
         # ── Outputs list (must match _yield tuple order) ────────────────────

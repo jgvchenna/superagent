@@ -108,20 +108,33 @@ Your task:
 2. Identify what domain knowledge is needed
 3. Break it into concrete sub-questions that can each be answered with a single tool call
 4. Produce a clear execution plan
+5. Identify which fallback tools might be needed if initial searches are insufficient
 
-Available tools:
-- web_search: current events, recent data, URLs, news
+Available PRIMARY tools:
+- web_search: current events, recent data, URLs, news (DuckDuckGo)
 - wikipedia_search: encyclopedic knowledge, history, science, geography
 - calculator: arithmetic, algebra, unit conversions, statistics
 - python_repl: complex computation, data analysis, string manipulation, algorithms
 - reasoning_scratchpad: logic puzzles, multi-constraint deduction
+
+Available FALLBACK tools (use if primary search results are insufficient):
+- tavily_search: advanced web search with better coverage for complex queries
+- wikipedia_loader: full Wikipedia document loading for comprehensive information
+- arxiv_search: academic papers and research articles for scientific topics
+
+STRATEGY:
+- Start with primary tools (web_search, wikipedia_search)
+- If search results are sparse or low-quality, escalate to fallback tools
+- Use tavily_search for general topics where initial search failed
+- Use arxiv_search for academic/scientific questions
+- Use wikipedia_loader for in-depth historical/biographical information
 
 Respond with a JSON block (and nothing else):
 {
   "analysis": "brief analysis of what makes this question hard",
   "domain": "primary knowledge domain",
   "sub_questions": ["list", "of", "sub-questions"],
-  "tool_strategy": "which tools to use and why",
+  "tool_strategy": "which primary and fallback tools to use and why",
   "plan": "numbered step-by-step execution plan as a single string"
 }"""
 
@@ -156,15 +169,26 @@ def planner_node(state: AgentState, api_key: str, model: str) -> dict:
     # Inject the plan as context for the main agent
     plan_message = SystemMessage(
         content=f"""You are a GAIA Level 3 question-answering agent.
-        
+
 ORIGINAL QUESTION: {state['question']}
 
 STRATEGIC PLAN:
 {plan_text}
 
+TOOL ESCALATION STRATEGY:
+- PRIMARY SEARCH (tier 1): Use web_search and wikipedia_search first
+  - If these return good, diverse results, continue with analysis
+  - If results are sparse/low-quality, escalate to fallback tools
+
+- FALLBACK SEARCH (tier 2): Use only if primary search results are insufficient
+  - tavily_search: Better web coverage for complex topics
+  - wikipedia_loader: Full article content for historical/biographical topics
+  - arxiv_search: Academic papers for scientific/mathematical questions
+
 Execute this plan using the available tools. Be thorough and precise.
 After gathering all necessary information, you will synthesise a final answer.
-Use tools multiple times if needed. Verify key facts from multiple sources when possible."""
+Use tools multiple times if needed. Verify key facts from multiple sources when possible.
+Don't hesitate to escalate to fallback tools if initial searches are inadequate."""
     )
 
     return {
@@ -241,6 +265,14 @@ Evaluate:
 2. Is the evidence sufficient and reliable?
 3. Are there logical gaps or unsupported leaps?
 4. Is the answer specific and precise (GAIA requires exact answers)?
+5. Should we escalate to fallback search tools for better results?
+
+ESCALATION SIGNALS:
+- If web_search/wikipedia_search returned "No results found"
+- If search results are generic or low-quality
+- If the question is academic/scientific (suggest arxiv_search)
+- If the question is historical/biographical (suggest wikipedia_loader)
+- If initial searches didn't cover the topic well (suggest tavily_search)
 
 Respond in JSON:
 {
@@ -248,7 +280,9 @@ Respond in JSON:
   "gaps": ["list of gaps if any"],
   "critique": "detailed critique",
   "confidence": "HIGH | MEDIUM | LOW",
-  "suggested_queries": ["additional queries if NEEDS_MORE_INFO"]
+  "suggested_queries": ["additional queries if NEEDS_MORE_INFO"],
+  "escalate_to_fallback": false,
+  "fallback_tools": ["tavily_search", "wikipedia_loader", "arxiv_search"]
 }"""
 
 
@@ -296,20 +330,33 @@ Please critique whether we have sufficient information to answer the question pr
         confidence = data.get("confidence", "MEDIUM")
         gaps = data.get("gaps", [])
         suggested = data.get("suggested_queries", [])
+        escalate_to_fallback = data.get("escalate_to_fallback", False)
+        fallback_tools = data.get("fallback_tools", [])
     except json.JSONDecodeError:
         assessment = "SUFFICIENT"
         critique = raw
         confidence = "MEDIUM"
         gaps = []
         suggested = []
+        escalate_to_fallback = False
+        fallback_tools = []
 
     # If gaps exist and we haven't hit max iterations, inject follow-up message
     new_messages = []
     if assessment == "NEEDS_MORE_INFO" and state["iteration"] < state["max_iterations"] - 1:
-        follow_up = (
-            f"The critic identified gaps: {'; '.join(gaps)}. "
-            f"Please gather more information on: {'; '.join(suggested[:2])}."
-        )
+        if escalate_to_fallback and fallback_tools:
+            # Recommend fallback tools
+            fallback_str = ", ".join(fallback_tools)
+            follow_up = (
+                f"The critic identified gaps: {'; '.join(gaps)}. "
+                f"Escalate to fallback search tools: {fallback_str}. "
+                f"Please use these to gather more detailed information on: {'; '.join(suggested[:2])}."
+            )
+        else:
+            follow_up = (
+                f"The critic identified gaps: {'; '.join(gaps)}. "
+                f"Please gather more information on: {'; '.join(suggested[:2])}."
+            )
         new_messages = [HumanMessage(content=follow_up)]
 
     return {
