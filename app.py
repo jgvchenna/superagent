@@ -379,8 +379,8 @@ def create_ui():
         <div id="header-banner">
           <h1>🧠 GAIA Level 3 Agent</h1>
           <p>
-            Multi-step reasoning agent powered by <strong>LangGraph</strong> +
-            <strong>LangChain</strong> + <strong>OpenAI GPT-4o</strong>.
+            Multi-step reasoning agent powered by LangGraph +
+            LangChain + OpenAI GPT-4o.
             Tackles GAIA benchmark Level 3 questions requiring tool use, multi-hop reasoning,
             and cross-domain synthesis.
           </p>
