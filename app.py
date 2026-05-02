@@ -19,8 +19,8 @@ from typing import Generator
 import gradio as gr
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from superagent.graph import build_graph, AgentState
-from superagent.tools import TOOL_METADATA
+from graph import build_graph, AgentState
+from tools import TOOL_METADATA
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
