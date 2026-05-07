@@ -58,7 +58,7 @@ Question → Planner → Agent (ReAct) ⇄ Tools → Critic → Synthesiser → 
 
 ```bash
 git clone <this-repo>
-cd gaia-agent
+cd superagent
 pip install -r requirements.txt
 python app.py
 ```
